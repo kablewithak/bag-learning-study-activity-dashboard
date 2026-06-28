@@ -1,6 +1,6 @@
 # Study Activity Dashboard
 
-A locally validated, assessment-only study activity dashboard for the Bag Learning Software Development Intern take-home. The project uses FastAPI, PostgreSQL, React, and TypeScript, but the frontend is added in a later slice.
+A locally validated, assessment-only study activity dashboard for the Bag Learning Software Development Intern take-home. The project uses FastAPI, PostgreSQL, React, and TypeScript; the frontend is added in a later slice.
 
 ## Current scope
 
@@ -11,9 +11,10 @@ This repository currently provides:
 - a repository layer using parameterized `asyncpg` queries;
 - shared `X-API-Key` authentication;
 - group-student reads, activity listing/filtering/pagination, and activity creation;
+- PostgreSQL group statistics for student aggregates and a gap-free 14-day UTC trend;
 - database-enforced idempotent writes.
 
-The repository is **not** production-ready, deployed, customer-data tested, or real-auth ready.
+The repository is **not** production-ready, deployed, customer-data tested, load tested, or real-auth ready.
 
 ## Prerequisites
 
@@ -55,6 +56,17 @@ $headers = @{
 }
 
 Invoke-RestMethod -Headers $headers -Uri "http://localhost:8000/groups/4a4d6d1e-bf59-4e09-8fa7-21b2d2fcb9f9/students"
+```
+
+Verify the SQL-aggregated dashboard data:
+
+```powershell
+$headers = @{
+  "X-API-Key" = "local-development-api-key-change-me"
+}
+
+Invoke-RestMethod -Headers $headers -Uri "http://localhost:8000/groups/4a4d6d1e-bf59-4e09-8fa7-21b2d2fcb9f9/stats" |
+  ConvertTo-Json -Depth 6
 ```
 
 Create a new activity with a fresh idempotency key:
