@@ -1,87 +1,100 @@
-# Bag Learning Study Activity Dashboard
+# Study Activity Dashboard
 
-A local, synthetic-data study-activity dashboard for the Bag Learning Software Development Intern take-home.
+A locally validated, assessment-only study activity dashboard for the Bag Learning Software Development Intern take-home. The project uses FastAPI, PostgreSQL, React, and TypeScript, but the frontend is added in a later slice.
 
 ## Current scope
 
-This repository currently contains the database foundation for the feature:
+This repository currently provides:
 
-- PostgreSQL 16 through Docker Compose
-- schema with foreign keys, indexes, a score-consistency `CHECK` constraint, and database-enforced idempotency-key uniqueness
-- one stable study group, five stable students, and 56 seeded activities spread across the current 14 UTC calendar-day window
+- PostgreSQL 16 with deterministic synthetic seed data;
+- FastAPI plus explicit Pydantic v2 request and response models;
+- a repository layer using parameterized `asyncpg` queries;
+- shared `X-API-Key` authentication;
+- group-student reads, activity listing/filtering/pagination, and activity creation;
+- database-enforced idempotent writes.
 
-The FastAPI backend and React dashboard are intentionally added in the next implementation slices. This repository is not production-ready, deployed, customer-data tested, or real-auth ready.
-
-## Stack
-
-```text
-Database: PostgreSQL 16
-Backend (next slice): Python 3.11+, FastAPI, Pydantic v2, asyncpg
-Frontend (later slice): React 18, TypeScript, Vite, Tailwind, TanStack React Query, Recharts
-Runtime: Docker Compose
-```
+The repository is **not** production-ready, deployed, customer-data tested, or real-auth ready.
 
 ## Prerequisites
 
-- Docker Desktop with Docker Compose v2
-- Git
-- Later slices will require Python 3.11+ and Node.js 20+
+- Docker Desktop with Docker Compose v2;
+- Git;
+- optionally, Python 3.11+ for local editor tooling.
 
-## Local startup: database foundation
+## Start the database and API
 
-1. Copy the environment template:
+From the repository root:
 
 ```powershell
 Copy-Item .env.example .env
-```
 
-2. Start PostgreSQL and wait for the health check:
+docker compose up --build -d
 
-```powershell
-docker compose up -d
 docker compose ps
 ```
 
-3. Confirm the seeded data:
+The API is available at `http://localhost:8000`. PostgreSQL initializes from `db/init/` only when its Docker volume is first created.
 
-```powershell
-docker compose exec db psql -U study_activity -d study_activity -c "SELECT (SELECT count(*) FROM study_groups) AS groups, (SELECT count(*) FROM students) AS students, (SELECT count(*) FROM activities) AS activities;"
-```
+## Seeded dashboard target
 
-Expected result:
+The future frontend dashboard will use this group ID:
 
 ```text
-groups | students | activities
--------+----------+-----------
-1      | 5        | 56
+4a4d6d1e-bf59-4e09-8fa7-21b2d2fcb9f9
 ```
 
-4. Confirm the stable seeded group:
+The seeded group is **Engineering Economics Study Group**. It contains five synthetic students and 56 activity records across the most recent 14 UTC calendar days, including intentional zero-activity days.
+
+## Direct API verification
+
+The local API key is stored in `.env`. The example key is intentionally local-only and must never be committed as a real secret.
 
 ```powershell
-docker compose exec db psql -U study_activity -d study_activity -c "SELECT id, name FROM study_groups;"
+$headers = @{
+  "X-API-Key" = "local-development-api-key-change-me"
+}
+
+Invoke-RestMethod -Headers $headers -Uri "http://localhost:8000/groups/4a4d6d1e-bf59-4e09-8fa7-21b2d2fcb9f9/students"
 ```
 
-Dashboard route for the completed app:
+Create a new activity with a fresh idempotency key:
 
-```text
-/groups/4a4d6d1e-bf59-4e09-8fa7-21b2d2fcb9f9
+```powershell
+$headers = @{
+  "X-API-Key" = "local-development-api-key-change-me"
+  "X-Idempotency-Key" = [guid]::NewGuid().ToString()
+}
+
+$body = @{
+  type = "quiz_attempted"
+  score = 85
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Headers $headers `
+  -ContentType "application/json" `
+  -Body $body `
+  -Uri "http://localhost:8000/students/f03b9d4e-bf26-4b83-a0a4-c8f72d951b01/activities"
 ```
 
-## Reset the local database
+## Run validation
 
-The initialisation scripts run only when PostgreSQL creates a fresh data volume. Resetting therefore removes the named Docker volume and reloads the schema and synthetic seed data.
+```powershell
+docker compose exec backend pytest
+
+docker compose exec backend ruff check .
+```
+
+## Reset local database data
+
+This removes only the project Docker volume and recreates the deterministic synthetic data:
 
 ```powershell
 docker compose down -v
-docker compose up -d
-docker compose ps
+docker compose up --build -d
 ```
 
-## Local configuration boundary
+## API-key boundary
 
-`.env` is ignored by Git. The values in `.env.example` are local-only example values, not production credentials. The eventual Vite development proxy will inject the shared API key for local requests so the browser bundle does not contain it. That assessment-specific pattern is not production user authentication.
-
-## Assessment maturity boundary
-
-This project is being built for local validation with synthetic data. It will not claim production deployment, production-scale performance, customer-data validation, or real user authorization.
+The shared API key satisfies the assessment’s simple local protection requirement. It is **not** production user authentication or authorization. The frontend will call the backend through a Vite development proxy so the shared key does not enter the browser bundle; a production web application would instead use a user session or token while service credentials remain server-side.
