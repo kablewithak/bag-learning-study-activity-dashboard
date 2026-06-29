@@ -1,5 +1,8 @@
 import type {
+  ActivityCreatePayload,
+  ActivityResponse,
   ActivityTrendPoint,
+  ActivityType,
   GroupStatsResponse,
   GroupStatsSummary,
   StudentActivityStats,
@@ -26,6 +29,28 @@ export async function getGroupStats(groupId: string): Promise<GroupStatsResponse
   return parseGroupStatsResponse(payload);
 }
 
+export async function createActivity(
+  studentId: string,
+  payload: ActivityCreatePayload,
+  idempotencyKey: string,
+): Promise<ActivityResponse> {
+  const response = await fetch(`/api/students/${encodeURIComponent(studentId)}/activities`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Idempotency-Key": idempotencyKey,
+    },
+    body: JSON.stringify(payload),
+  });
+  const responsePayload = await readResponsePayload(response);
+
+  if (!response.ok) {
+    throw new ApiClientError(getErrorMessage(response.status, responsePayload), response.status);
+  }
+
+  return parseActivityResponse(responsePayload);
+}
+
 async function readResponsePayload(response: Response): Promise<unknown> {
   const responseText = await response.text();
   if (!responseText) {
@@ -46,10 +71,13 @@ function getErrorMessage(status: number, payload: unknown): string {
     return "The app could not authenticate with the API.";
   }
   if (status === 404) {
-    return "That study group no longer exists. Check the URL and try again.";
+    return "That student or study group no longer exists. Refresh the dashboard and try again.";
+  }
+  if (status === 409) {
+    return "This request key was already used with different activity details. Start a new activity entry.";
   }
   if (status >= 500) {
-    return "The dashboard service had a problem. Refresh the page and try again.";
+    return "The dashboard service had a problem. Retry the same activity when it is available.";
   }
 
   return detail ?? "The dashboard service returned an unexpected response.";
@@ -134,6 +162,27 @@ function parseTrendPoint(value: unknown): ActivityTrendPoint {
   };
 }
 
+function parseActivityResponse(value: unknown): ActivityResponse {
+  if (
+    !isRecord(value) ||
+    !isNonEmptyString(value.id) ||
+    !isNonEmptyString(value.student_id) ||
+    !isActivityType(value.type) ||
+    !isNullableFiniteNumber(value.score) ||
+    !isNonEmptyString(value.created_at)
+  ) {
+    throw new ApiClientError("The dashboard service returned invalid activity data.");
+  }
+
+  return {
+    id: value.id,
+    student_id: value.student_id,
+    type: value.type,
+    score: value.score,
+    created_at: value.created_at,
+  };
+}
+
 function parseArray<T>(
   value: unknown,
   parser: (item: unknown) => T,
@@ -164,4 +213,8 @@ function isNonNegativeInteger(value: unknown): value is number {
 
 function isNullableFiniteNumber(value: unknown): value is number | null {
   return value === null || (typeof value === "number" && Number.isFinite(value));
+}
+
+function isActivityType(value: unknown): value is ActivityType {
+  return value === "lesson_completed" || value === "quiz_attempted" || value === "note_added";
 }

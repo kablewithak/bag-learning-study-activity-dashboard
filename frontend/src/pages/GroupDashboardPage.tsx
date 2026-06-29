@@ -1,6 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 
+import { ActivityCreateForm } from "../components/ActivityCreateForm";
+import { ActivityTrendChart } from "../components/ActivityTrendChart";
 import { StudentStatsTable } from "../components/StudentStatsTable";
 import { ApiClientError, getGroupStats } from "../lib/api";
 
@@ -9,6 +11,7 @@ const uuidPattern =
 
 export function GroupDashboardPage() {
   const { groupId } = useParams<{ groupId: string }>();
+  const queryClient = useQueryClient();
   const isValidGroupId = groupId !== undefined && uuidPattern.test(groupId);
 
   const query = useQuery({
@@ -63,7 +66,11 @@ export function GroupDashboardPage() {
     );
   }
 
-  const { group, students } = query.data;
+  const { group, students, activity_trend: activityTrend } = query.data;
+
+  async function refreshDashboardAfterActivity(): Promise<void> {
+    await queryClient.invalidateQueries({ queryKey: ["group-stats", groupId] });
+  }
 
   return (
     <PageFrame>
@@ -82,14 +89,12 @@ export function GroupDashboardPage() {
         </div>
       </header>
 
-      <StudentStatsTable students={students} />
-
-      <section className="rounded-panel border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-600">
-        <h2 className="font-semibold text-ink">Next dashboard increment</h2>
-        <p className="mt-1">
-          The add-activity form and gap-free 14-day trend chart are intentionally added in the next slice.
-        </p>
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+        <ActivityCreateForm students={students} onActivityCreated={refreshDashboardAfterActivity} />
+        <ActivityTrendChart trend={activityTrend} />
       </section>
+
+      <StudentStatsTable students={students} />
     </PageFrame>
   );
 }

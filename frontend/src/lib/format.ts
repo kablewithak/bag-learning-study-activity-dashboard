@@ -1,4 +1,4 @@
-import { formatDistanceToNowStrict } from "date-fns";
+import { format, formatDistanceToNowStrict, parseISO } from "date-fns";
 
 export function formatAverageQuizScore(score: number | null): string {
   if (score === null) {
@@ -19,4 +19,14 @@ export function formatLastActive(lastActiveAt: string | null): string {
   }
 
   return formatDistanceToNowStrict(date, { addSuffix: true });
+}
+
+export function formatTrendDay(day: string): string {
+  const parsedDay = parseISO(day);
+
+  if (Number.isNaN(parsedDay.getTime())) {
+    return day;
+  }
+
+  return format(parsedDay, "d MMM");
 }

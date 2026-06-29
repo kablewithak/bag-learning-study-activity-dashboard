@@ -12,8 +12,9 @@ This repository currently provides:
 - shared `X-API-Key` authentication;
 - group-student reads, activity listing/filtering/pagination, activity creation, and SQL-aggregated group statistics;
 - database-enforced idempotent writes;
-- a React dashboard shell with loading, failure/retry, empty-table, and sortable-table behavior;
-- a Vite development proxy that injects the local API key server-side.
+- a React dashboard with loading, failure/retry, sortable-table, add-activity, and 14-day activity-trend behavior;
+- a Vite development proxy that injects the local API key server-side;
+- a retained-idempotency-key retry path for recoverable activity-submit failures.
 
 The repository is **not** production-ready, deployed, customer-data tested, load tested, or real-auth ready.
 
@@ -53,6 +54,17 @@ The dashboard opens this seeded study group:
 ```
 
 The seeded group is **Engineering Economics Study Group**. It contains five synthetic students and 56 activity records across the most recent 14 UTC calendar days, including intentional zero-activity days.
+
+## Add-activity behavior
+
+The dashboard records `lesson_completed`, `quiz_attempted`, or `note_added` activities through the typed POST API.
+
+- Quiz scores are optional but, when supplied, must be whole numbers from 0 through 100.
+- Lesson and note activities never include a score.
+- A fresh submission creates an idempotency key in the browser.
+- A recoverable failed submission retains the exact student, payload, and idempotency key. **Retry exact activity** reuses that same request identity.
+- A changed form intent receives a new idempotency key.
+- A successful write invalidates the group-statistics query so the trend and student table refresh from PostgreSQL.
 
 ## Development proxy and API-key boundary
 

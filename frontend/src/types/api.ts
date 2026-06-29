@@ -25,3 +25,18 @@ export interface GroupStatsResponse {
   students: StudentActivityStats[];
   activity_trend: ActivityTrendPoint[];
 }
+
+export type ActivityType = "lesson_completed" | "quiz_attempted" | "note_added";
+
+export interface ActivityCreatePayload {
+  type: ActivityType;
+  score: number | null;
+}
+
+export interface ActivityResponse {
+  id: string;
+  student_id: string;
+  type: ActivityType;
+  score: number | null;
+  created_at: string;
+}
