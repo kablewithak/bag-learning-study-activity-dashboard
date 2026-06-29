@@ -1,6 +1,6 @@
 # Study Activity Dashboard
 
-A locally validated, assessment-only study activity dashboard for the Bag Learning Software Development Intern take-home. The project uses FastAPI, PostgreSQL, React, and TypeScript; the frontend is added in a later slice.
+A locally validated, assessment-only study activity dashboard for the Bag Learning Software Development Intern take-home. The project uses FastAPI, PostgreSQL, React, TypeScript, Vite, Tailwind CSS, and TanStack React Query.
 
 ## Current scope
 
@@ -10,9 +10,10 @@ This repository currently provides:
 - FastAPI plus explicit Pydantic v2 request and response models;
 - a repository layer using parameterized `asyncpg` queries;
 - shared `X-API-Key` authentication;
-- group-student reads, activity listing/filtering/pagination, and activity creation;
-- PostgreSQL group statistics for student aggregates and a gap-free 14-day UTC trend;
-- database-enforced idempotent writes.
+- group-student reads, activity listing/filtering/pagination, activity creation, and SQL-aggregated group statistics;
+- database-enforced idempotent writes;
+- a React dashboard shell with loading, failure/retry, empty-table, and sortable-table behavior;
+- a Vite development proxy that injects the local API key server-side.
 
 The repository is **not** production-ready, deployed, customer-data tested, load tested, or real-auth ready.
 
@@ -20,9 +21,10 @@ The repository is **not** production-ready, deployed, customer-data tested, load
 
 - Docker Desktop with Docker Compose v2;
 - Git;
-- optionally, Python 3.11+ for local editor tooling.
+- optionally, Node.js 22+ for direct frontend checks outside Docker;
+- optionally, Python 3.11+ for direct backend editor tooling.
 
-## Start the database and API
+## Start the complete local system
 
 From the repository root:
 
@@ -34,17 +36,29 @@ docker compose up --build -d
 docker compose ps
 ```
 
-The API is available at `http://localhost:8000`. PostgreSQL initializes from `db/init/` only when its Docker volume is first created.
+Open the dashboard:
+
+```text
+http://localhost:5173/groups/4a4d6d1e-bf59-4e09-8fa7-21b2d2fcb9f9
+```
+
+The API is available at `http://localhost:8000`, and interactive API documentation is at `http://localhost:8000/docs`. PostgreSQL initializes from `db/init/` only when its Docker volume is first created.
 
 ## Seeded dashboard target
 
-The future frontend dashboard will use this group ID:
+The dashboard opens this seeded study group:
 
 ```text
 4a4d6d1e-bf59-4e09-8fa7-21b2d2fcb9f9
 ```
 
 The seeded group is **Engineering Economics Study Group**. It contains five synthetic students and 56 activity records across the most recent 14 UTC calendar days, including intentional zero-activity days.
+
+## Development proxy and API-key boundary
+
+The React app calls only relative `/api/...` paths. During local development, Vite forwards those requests to FastAPI and adds `X-API-Key` from the frontend container environment. The key is therefore not present in browser source code or bundled TypeScript.
+
+This pattern satisfies the assessment’s local shared-key requirement. It is **not** production user authentication or authorization. A production browser application would use user sessions or tokens while service credentials remain server-side.
 
 ## Direct API verification
 
@@ -55,42 +69,13 @@ $headers = @{
   "X-API-Key" = "local-development-api-key-change-me"
 }
 
-Invoke-RestMethod -Headers $headers -Uri "http://localhost:8000/groups/4a4d6d1e-bf59-4e09-8fa7-21b2d2fcb9f9/students"
-```
-
-Verify the SQL-aggregated dashboard data:
-
-```powershell
-$headers = @{
-  "X-API-Key" = "local-development-api-key-change-me"
-}
-
 Invoke-RestMethod -Headers $headers -Uri "http://localhost:8000/groups/4a4d6d1e-bf59-4e09-8fa7-21b2d2fcb9f9/stats" |
   ConvertTo-Json -Depth 6
 ```
 
-Create a new activity with a fresh idempotency key:
-
-```powershell
-$headers = @{
-  "X-API-Key" = "local-development-api-key-change-me"
-  "X-Idempotency-Key" = [guid]::NewGuid().ToString()
-}
-
-$body = @{
-  type = "quiz_attempted"
-  score = 85
-} | ConvertTo-Json
-
-Invoke-RestMethod `
-  -Method Post `
-  -Headers $headers `
-  -ContentType "application/json" `
-  -Body $body `
-  -Uri "http://localhost:8000/students/f03b9d4e-bf26-4b83-a0a4-c8f72d951b01/activities"
-```
-
 ## Run validation
+
+Backend checks:
 
 ```powershell
 docker compose exec backend pytest
@@ -98,15 +83,21 @@ docker compose exec backend pytest
 docker compose exec backend ruff check .
 ```
 
+Frontend checks:
+
+```powershell
+docker compose exec frontend npm run lint
+
+docker compose exec frontend npm run typecheck
+
+docker compose exec frontend npm run build
+```
+
 ## Reset local database data
 
-This removes only the project Docker volume and recreates the deterministic synthetic data:
+This removes only the project Docker volume and recreates deterministic synthetic data:
 
 ```powershell
 docker compose down -v
 docker compose up --build -d
 ```
-
-## API-key boundary
-
-The shared API key satisfies the assessment’s simple local protection requirement. It is **not** production user authentication or authorization. The frontend will call the backend through a Vite development proxy so the shared key does not enter the browser bundle; a production web application would instead use a user session or token while service credentials remain server-side.

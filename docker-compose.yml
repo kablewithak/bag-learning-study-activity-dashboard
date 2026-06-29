@@ -31,5 +31,18 @@ services:
       db:
         condition: service_healthy
 
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      API_KEY: ${API_KEY:?Set API_KEY in .env}
+      BACKEND_ORIGIN: http://backend:8000
+      TZ: UTC
+    ports:
+      - "5173:5173"
+    depends_on:
+      backend:
+        condition: service_started
+
 volumes:
   study_activity_postgres_data:
